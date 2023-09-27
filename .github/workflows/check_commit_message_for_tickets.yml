@@ -1,0 +1,42 @@
+name: Check Commit Message
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  check-commit-message:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install jq
+        run: sudo apt-get install jq
+
+      - name: Fetch PR data
+        id: pr_data
+        run: |
+          PR_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                    "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits")
+          FIRST_COMMIT_MESSAGE=$(echo "$PR_DATA" | jq -r '.[0].commit.message')
+          echo "FIRST_COMMIT_MESSAGE<<EOF" >> $GITHUB_ENV
+          echo "$FIRST_COMMIT_MESSAGE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Check message field
+        run: |
+          # The regex pattern, case-insensitive, and accounting for optional trailing whitespace
+          pattern="^(?i)(ref|refs|reference|references|res|resolve|resolves)[ \t]*:[ \t]*(gh-|\!|[A-Za-z]+-)\d+\s*$"
+
+          # Write the multi-line commit message to a temp file
+          echo -e "$FIRST_COMMIT_MESSAGE" > temp_message.txt
+
+          # Scan the temp file for lines matching the pattern
+          if grep -Pq "$pattern" temp_message.txt; then
+            exit 0
+          else
+            echo "Commit message does not meet the requirements."
+            exit 1
+          fi
+
