@@ -7,6 +7,8 @@ on:
 jobs:
   check-commit-message:
     runs-on: ubuntu-latest
+    env:
+      REGEX_PATTERN: '^(?i)(ref|refs|reference|references|res|resolve|resolves)[ \t]*:[ \t]*(gh-|\!|[A-Za-z]+-)\d+\s*$'
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -18,25 +20,50 @@ jobs:
         id: pr_data
         run: |
           PR_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                    "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits")
-          FIRST_COMMIT_MESSAGE=$(echo "$PR_DATA" | jq -r '.[0].commit.message')
-          echo "FIRST_COMMIT_MESSAGE<<EOF" >> $GITHUB_ENV
-          echo "$FIRST_COMMIT_MESSAGE" >> $GITHUB_ENV
+                    "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
+          echo "PR_DATA<<EOF" >> $GITHUB_ENV
+          echo "$PR_DATA" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Check message field
+      - name: Check PR body
         run: |
-          # The regex pattern, case-insensitive, and accounting for optional trailing whitespace
-          pattern="^(?i)(ref|refs|reference|references|res|resolve|resolves)[ \t]*:[ \t]*(gh-|\!|[A-Za-z]+-)\d+\s*$"
+          # Extract the PR body from the PR_DATA environment variable
+          PR_BODY=$(echo "$PR_DATA" | jq -r '.body')
 
-          # Write the multi-line commit message to a temp file
-          echo -e "$FIRST_COMMIT_MESSAGE" > temp_message.txt
+          # Write the PR body to a temp file
+          echo -e "$PR_BODY" > temp_message.txt
 
           # Scan the temp file for lines matching the pattern
-          if grep -Pq "$pattern" temp_message.txt; then
+          if grep -Pq "$REGEX_PATTERN" temp_message.txt; then
             exit 0
           else
-            echo "Commit message does not meet the requirements."
+            echo "PR body should contain an issue or ticket reference"
             exit 1
           fi
+
+
+      # - name: Check PR commits
+      #   id: check_pr_commits
+      #   run: |
+
+      #     FIRST_COMMIT_MESSAGE=$(echo "$PR_DATA" | jq -r '.[0].commit.message')
+      #     echo "FIRST_COMMIT_MESSAGE<<EOF" >> $GITHUB_ENV
+      #     echo "$FIRST_COMMIT_MESSAGE" >> $GITHUB_ENV
+      #     echo "EOF" >> $GITHUB_ENV
+
+      # - name: Check message field
+      #   run: |
+      #     # The regex pattern, case-insensitive, and accounting for optional trailing whitespace
+      #     pattern="^(?i)(ref|refs|reference|references|res|resolve|resolves)[ \t]*:[ \t]*(gh-|\!|[A-Za-z]+-)\d+\s*$"
+
+      #     # Write the multi-line commit message to a temp file
+      #     echo -e "$FIRST_COMMIT_MESSAGE" > temp_message.txt
+
+      #     # Scan the temp file for lines matching the pattern
+      #     if grep -Pq "$pattern" temp_message.txt; then
+      #       exit 0
+      #     else
+      #       echo "Commit message does not meet the requirements."
+      #       exit 1
+      #     fi
 
